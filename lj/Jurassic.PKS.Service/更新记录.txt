@@ -1,0 +1,88 @@
+/**************************
+更新日期：2017-11-17  薛炜
+（一）同一TabId返回的数据加入到 同一Result下 
+修改 Jurassic.PKS.Service\PKS.Service.API\PKS.WebAPI.Implements\ES\
+	SearchEntity.cs
+	public virtual async Task<List<TopicResult>> BlockTopicWrapperAsync(TopicRequest request)
+
+/**************************
+更新日期：2017-11-17  薛炜
+(一) 这是一次大的更新，主要变动了搜索服务。为适应日后的可变需求（不同type的检索），对原有的一些class扩展了泛类型，主要更新了以下几个文件
+1，PKS.WebAPI.Implements\ES 下
+	1）新增 class SearchEntity<T> : ServiceBase where T : class
+		目前暂时支持以下通用检索：（因在原有的代码基础上进行移植，所以仅作了以下几个作为测试，后面开始将逐步其他方法移植进来）
+		a, GetEsdataAsync 根据IIID检索
+		b, GetEsdatasAsync 根据IIIDS检索
+		c, StatisticsAsync 根据集合条件获取统计信息
+		d, SearchPlusAsync 搜索增强版
+	2) 修改 原 class SearchProvider 为 class SearchProvider<T> where T : class 
+	3）修改 原 class Extensions 为 class Extensions<T> where T : class 去掉扩展方法，泛类型不支持 this 扩展
+	4）修改 SearchProvider 调用方式 加<T>
+2, PKS.Core\Models 下
+	1）修改 原 class MetadataCollection 为 class MetadataCollection<T> : List<T>
+3，全项目修改，根据1,2条新的方法，修改所有原代码中的调用，这里就不一一列出了。
+/**************************
+更新日期：2017-11-15  薛炜
+（一）用户行为分析 更新 
+1，重建了 UserBehavior 模型。修改 PKS.Core\Models 下 UserBehavior
+2，根据新的model，修改了kettle 用户日志导入规则。用户日志将保存在 ubehaviorlog _type下
+3，PKS.WebAPI.Implements\Services\UserBehaviorService.cs 增加了
+	1）根据iiid搜索 Task<UserBehavior> GetUserBehaviorAsync(SearchMetadataRequest request)
+	2）根据iiid组搜索 Task<UserBehavior> GetUserBehaviorsAsync(SearchMetadataRequest request) 
+	3）根据集合条件获取统计信息 SearchStatisticsResult Statistics(SearchStatisticsRequest request)
+	4) 搜索增强版 Task<List<TopicResult>> BlockTopicWrapperAsync(TopicRequest request)
+	及其相关接口文件。
+4，PKS.WebAPI\Controllers\UserBehaviorServiceController.cs 增加了以下webapi接口：
+POST api/UserBehaviorService/GetUserBehavior	
+根据iiid搜索
+
+POST api/UserBehaviorService/GetUserBehaviors	
+根据iiids数组搜索
+
+POST api/UserBehaviorService/Statistics	
+根据聚合条件获取统计信息
+
+/**************************
+更新日期：2017-11-13  薛炜
+（一）BlockTopicWrapperAsync(TopicRequest request) 方法中 增加聚合分组显示
+	1）PKS.WebAPI.Models/TabResult  增加 
+	    /// <summary>
+        /// 返回分组聚合结果
+        /// </summary>
+        [DataMember(Name = "Group")]
+        [JsonProperty("group")]
+        public object Group { get; set; }
+	说明：在查询语句中 配置  "group": ["pt","title"]  结果将显示分组聚合结果。
+/**************************
+更新日期：2017-11-8  薛炜
+实现 BlockTopicWrapperAsync(TopicRequest request) 方法中
+说明： 关联推荐的配置 在 configure 节点里面
+        "reltopics":{
+                 "masterdata": {
+                     "iiid": ["6fcce534-0dd5-eef6-6abf-53b8b4dcf844"]
+                    },
+                 "masterfields": [ ],
+                 "relationfields": [ "pc", "pt", "bd" ],
+                 "relationsymbol": "_or",
+                 "intelligent": true 
+            }
+/**************************
+更新日期：2017-11-1  薛炜
+
+1) 在 PKS.WebAPI.Services/ServiceBase 增加了 BuildRelRequest(JObject relQuery)
+用来构建关联检索的 TopicRelationRequest
+2）在 PKS.WebAPI.Controllers/TopicServiceController 增加了 ask<List<TopicResult>> GetTopPic(TopicRequest request) 
+其实是调用 Task<List<TopicResult>> BlockTopicWrapperAsync(TopicRequest request)
+3）扩展数据请求基类 PKS.WebAPI.Models / RequestBase 
+/// <summary>
+/// 信息搜索默认配置
+/// </summary>
+[DataMember(Name = "configure")]
+[JsonProperty("configure")]
+public JObject configure { get; set; }
+4） 修改 Task<List<TopicResult>> BlockTopicWrapperAsync(TopicRequest request) 方法
+a. 增加默认搜索选项的配置，如果configure 配置 将作为每个模块和tab分组中默认的搜索配置项（此举用来节省前台研发人员不用每个tab query 都要配置参数）
+b, 填补原代码中 
+//根据搜索类别附加过滤
+if (tgr.SearchType == TopicSearchType.None)//普通请求不需要处理
+过滤条件。
